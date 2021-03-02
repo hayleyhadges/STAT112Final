@@ -1,0 +1,108 @@
+---
+title: "stat112 final project"
+output: html_document
+---
+```{r}
+library(tidyverse)
+library(geofacet)
+```
+
+```{r}
+tuition_cost <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-10/tuition_cost.csv')
+
+tuition_income <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-10/tuition_income.csv') 
+
+salary_potential <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-10/salary_potential.csv')
+
+historical_tuition <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-10/historical_tuition.csv')
+
+diversity_school <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-10/diversity_school.csv')
+```
+
+```{r}
+ht <-
+historical_tuition %>% 
+  filter(tuition_type == "4 Year Constant",
+         type != "All Institutions") %>% 
+  separate(year,c("start_year", "end"), "-" )
+
+ht %>% 
+  ggplot(aes(x = start_year, y = tuition_cost, group = type, color = type)) +
+  geom_line()
+```
+
+```{r}
+avg_state_tuition <-
+tuition_cost %>% 
+  filter(degree_length == "4 Year",
+         type != "For Profit") %>% 
+  group_by(state, type) %>% 
+  summarise(avg_tuition = mean(in_state_tuition))
+```
+
+```{r, fig.height= 12, fig.width=16}
+income <-
+tuition_income %>% 
+  mutate(state_name = state.name[match(state, state.abb)]) %>% 
+  group_by(state_name, year, income_lvl) %>% 
+  summarise(percent_total_tuition = mean(net_cost)/mean(total_price),
+            avg_net_price = mean(net_cost))
+```
+
+```{r}
+income %>% 
+  ggplot(aes(x = year, y = avg_net_price, color = income_lvl)) +
+  geom_line() + 
+  facet_geo(~ state)
+
+income %>% 
+  ggplot(aes(x = year, y = percent_total_tuition, color = income_lvl)) +
+  geom_line() + 
+  facet_geo(~ state)
+```
+
+
+```{r}
+percent_div <-
+diversity_school %>% 
+  mutate(percent_minority = (enrollment / total_enrollment) * 100)
+```
+
+
+```{r}
+ht2010 <-
+ht %>% 
+  filter(start_year >= 2010)
+```
+
+```{r}
+potential <-
+salary_potential %>% 
+  group_by(state_name) %>% 
+  filter(rank <= 5)
+```
+
+```{r}
+injwdc <-
+tuition_cost %>%
+  left_join(tuition_income %>%
+  filter(year == 2018,
+         campus == "On Campus"), 
+         by = "name")
+
+```
+
+
+```{r}
+new_data <-
+salary_potential %>% 
+  left_join(tuition_income, by = c("name" = "name")) %>% 
+  filter(year == 2018,
+         campus == "On Campus")
+
+new_data2 <-
+salary_potential %>% 
+  left_join(income, by = c("state_name" = "state_name")) %>% 
+  filter(year == 2018)
+
+```
