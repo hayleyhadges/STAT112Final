@@ -1,10 +1,39 @@
 ---
-title: "stat112 final project"
+title: "STAT112 Final Project"
 output: html_document
+author: "Hayley Hadges"
 ---
+
+# INTRODUCTION:
+
+### RESEARCH QUESTIONS:
+
+1. How does the cost of college differ for income level?
+
+2. How has the cost of college changed over time?
+
+3. Is the cost of college worth the payout?
+
+4. Does it really matter where you receive your degree?
+
+
+# DATA: 
+I found these datasets on Tidy Tuesday, 2020-03-10, called "College tuition, diversity, and pay". The data comes from many different sources but originally came from the US Department of Education, and the massive amount of data that was filtered down to a few tables.
+
+# ANALYSIS:
+
 ```{r}
 library(tidyverse)
 library(geofacet)
+library(maps)          # for map data
+library(ggmap)         # for mapping points on maps
+library(gplots)        # for col2hex() function
+library(RColorBrewer)  # for color palettes
+library(sf)            # for working with spatial data
+library(leaflet)       # for highly customizable mapping
+library(ggthemes) 
+library(openintro) 
+library(ggridges)
 ```
 
 ```{r}
@@ -47,18 +76,35 @@ tuition_income %>%
   group_by(state_name, year, income_lvl) %>% 
   summarise(percent_total_tuition = mean(net_cost)/mean(total_price),
             avg_net_price = mean(net_cost))
+
+income2 <-
+tuition_income %>% 
+  group_by(state, year, income_lvl) %>% 
+  summarise(percent_total_tuition = mean(net_cost)/mean(total_price),
+            avg_net_price = mean(net_cost))
 ```
 
 ```{r}
-income %>% 
+income2 %>% 
   ggplot(aes(x = year, y = avg_net_price, color = income_lvl)) +
   geom_line() + 
   facet_geo(~ state)
 
-income %>% 
+income2 %>% 
   ggplot(aes(x = year, y = percent_total_tuition, color = income_lvl)) +
   geom_line() + 
   facet_geo(~ state)
+
+
+income2 %>% 
+  filter(state == "MN") %>% 
+  ggplot(aes(x = year, y = avg_net_price, color = income_lvl)) +
+  geom_line()
+
+income2 %>% 
+  filter(state == "MN") %>% 
+  ggplot(aes(x = year, y = percent_total_tuition, color = income_lvl)) +
+  geom_line()
 ```
 
 
@@ -76,10 +122,13 @@ ht %>%
 ```
 
 ```{r}
-potential <-
+avg_potential <-
 salary_potential %>% 
-  group_by(state_name) %>% 
-  filter(rank <= 5)
+  group_by(state_name) %>%
+  summarise(avg_early_pay = mean(early_career_pay),
+            avg_mid_pay = mean(mid_career_pay),
+            avg_better_world = mean(make_world_better_percent, na.rm=TRUE),
+            avg_stem = mean(stem_percent))
 ```
 
 ```{r}
@@ -89,7 +138,6 @@ tuition_cost %>%
   filter(year == 2018,
          campus == "On Campus"), 
          by = "name")
-
 ```
 
 
@@ -104,5 +152,182 @@ new_data2 <-
 salary_potential %>% 
   left_join(income, by = c("state_name" = "state_name")) %>% 
   filter(year == 2018)
+```
+
+```{r}
+new_data2 %>% 
+  ggplot() +
+  geom_jitter(aes(x = avg_net_price, y = mid_career_pay, color = income_lvl)) 
+
+new_data %>% 
+  group_by(name) %>% 
+   ggplot() +
+  geom_jitter(aes(x = total_price, y = mid_career_pay)) 
+
+```
+
+```{r, fig.height=15, fig.width= 18}
+salary_potential %>% 
+  ggplot(aes(y=early_career_pay, x=fct_reorder(state_name, early_career_pay, mean))) + 
+    geom_boxplot(position="dodge", alpha=0.5, outlier.colour="transparent") +
+  coord_flip()
+
+salary_potential %>% 
+  filter(state_name == "Minnesota" |
+           state_name == "California" |
+           state_name == "Washington") %>% 
+  ggplot(aes(y=mid_career_pay, x=fct_reorder(state_name, mid_career_pay, mean), fill = state_name)) + 
+    geom_boxplot(position="dodge", alpha=0.5, outlier.colour="transparent") +
+  coord_flip()
+```
+
+```{r}
+states_map <- map_data("state")
+
+avg_potential %>% 
+  mutate(state = str_to_lower(state_name)) %>% 
+ # str_replace_all(state, "-", "") %>% 
+  ggplot() +
+  geom_map(map = states_map,
+           aes(map_id = state,
+               fill = avg_early_pay)) +
+  expand_limits(x = states_map$long, y = states_map$lat) + 
+  scale_fill_gradient2() +
+  theme_map()
+
+
+avg_potential %>% 
+  mutate(state = str_to_lower(state_name)) %>% 
+  ggplot() +
+  geom_map(map = states_map,
+           aes(map_id = state,
+               fill = avg_mid_pay)) +
+  expand_limits(x = states_map$long, y = states_map$lat) + 
+  scale_fill_gradient2() +
+  theme_map()
+```
+
+```{r}
+tuition_income %>% 
+  filter(year == 2018,
+         state == "MN" |
+           state == "CA" |
+           state == "WA") %>% 
+  group_by(name, state) %>% 
+  ggplot(aes(x = net_cost, y = income_lvl, fill = income_lvl)) +
+    geom_density_ridges() +
+  theme_ridges() +
+  facet_wrap(~state, ncol = 1)
+
+
+tuition_income %>% 
+  filter(year == 2018,
+         state == "MN" |
+           state == "CA" |
+           state == "WA",
+         income_lvl == "0 to 30,000") %>% 
+  group_by(name, state) %>% 
+  ggplot(aes(x = net_cost, y = state, fill = state)) +
+    geom_density_ridges() +
+  theme_ridges() 
+
+tuition_income %>% 
+  filter(year == 2018,
+         state == "MN" |
+           state == "CA" |
+           state == "WA",
+         income_lvl == "0 to 30,000") %>% 
+  group_by(name, state) %>% 
+ggplot(aes(y=net_cost, x=state)) + 
+    geom_violin(position="dodge") +
+  coord_flip()
+```
+
+```{r}
+tuition_cost %>% 
+  filter(degree_length == "4 Year",
+         type == "Private") %>% 
+   mutate(tuition_dif = out_of_state_tuition - in_state_tuition) %>% 
+  group_by(state)
+         
+tuition_cost %>% 
+  filter(degree_length == "4 Year",
+         type == "Public",
+         state == "Minnesota" |
+           state == "California" |
+           state == "Washington") %>% 
+  mutate(tuition_dif = out_of_state_tuition - in_state_tuition) %>% 
+  group_by(state, type) %>% 
+ ggplot(aes(x = tuition_dif, y = fct_reorder(state, tuition_dif, mean))) +
+    geom_density_ridges() +
+  theme_ridges() 
+```
+
+```{r}
+tuition_cost %>% 
+  filter(degree_length == "4 Year",
+         type == "Public",
+         state == "Minnesota" |
+           state == "California" |
+           state == "Washington") %>% 
+  mutate(tuition_dif = out_of_state_tuition - in_state_tuition) %>% 
+  group_by(state, type) %>%
+ggplot(aes(y=tuition_dif, x=fct_reorder(state, tuition_dif, mean))) + 
+    geom_violin(position="dodge") +
+  coord_flip()
+```
+
+
+```{r}
+diversity <-
+diversity_school %>% 
+  filter(state == "Minnesota" |
+           state == "California" |
+           state == "Washington") %>% 
+  pivot_wider(id_cols = name:state,
+              names_from = category,
+              values_from = enrollment) %>% 
+  group_by(state) %>% 
+  mutate(avg_total_enrollment = mean(total_enrollment),
+         avg_total_min = mean(`Total Minority`),
+         avg_native = mean(`American Indian / Alaska Native`),
+         avg_asian = mean(`Asian`),
+         avg_black = mean(`Black`),
+         avg_hispanic = mean(`Hispanic`),
+         avg_islander = mean(`Native Hawaiian / Pacific Islander`),
+         avg_multiple = mean(`Two Or More Races`),
+         avg_white = mean(`White`)) 
+
+diversity %>% 
+  ggplot(aes(x = state, y = total_enrollment, fill = )) +
+  geom_bar(stat = "identity")
+  
+
+```
+
+```{r}
+diversity2 <-
+diversity_school %>% 
+  filter(state == "Minnesota" |
+           state == "California" |
+           state == "Washington") %>% 
+  filter(!category %in% c("Women", "Unknown", "Non-Resident Foreign", "Total Minority"))
+
+diversity2 %>%  
+   ggplot(aes(x = state, y = enrollment, fill = category)) +
+  geom_bar(position = "fill", stat = "identity")
+```
+
+
+```{r}
+library(states)
+state_vector <- 
+  salary_potential %>% 
+  distinct(state_name)
+
+#state_list <- list(state_vector)
+
+names(state_vector) <-state.name
+
 
 ```
